@@ -1,17 +1,12 @@
-// package.json
-{
-  "name": "jumper-exchange-bot",
+  "name": "eth-l2-bridge-bot",
   "version": "1.0.0",
-  "description": "Jumper Exchange auto bridge bot using LIFI SDK",
-  "main": "main.js",
+  "main": "l2-bridge-bot.js",
   "scripts": {
-    "start": "node main.js"
+    "start": "node l2-bridge-bot.js"
   },
   "dependencies": {
     "@lifi/sdk": "^3.0.0",
     "ethers": "^6.0.0",
-    "axios": "^1.6.0",
     "dotenv": "^16.0.0"
-  },
-  "license": "MIT"
+  }
 }
