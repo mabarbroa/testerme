@@ -1,0 +1,25 @@
+# .gitattributes
+
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# JavaScript files
+*.js text eol=lf
+*.json text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+
+# Configuration files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+
+# Ensure certain files are never converted
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
