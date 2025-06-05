@@ -1,18 +1,17 @@
+// package.json
 {
-  "name": "jumper-bot",
+  "name": "jumper-exchange-bot",
   "version": "1.0.0",
-  "description": "Auto bridge & swap bot for Jumper Exchange",
-  "main": "index.js",
+  "description": "Jumper Exchange auto bridge bot using LIFI SDK",
+  "main": "main.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node main.js"
   },
   "dependencies": {
-    "@lifi/sdk": "^2.0.0",
-    "ethers": "^5.7.0",
+    "@lifi/sdk": "^3.0.0",
+    "ethers": "^6.0.0",
+    "axios": "^1.6.0",
     "dotenv": "^16.0.0"
   },
-  "devDependencies": {
-    "nodemon": "^2.0.0"
-  }
+  "license": "MIT"
 }
