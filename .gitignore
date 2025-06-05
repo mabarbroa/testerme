@@ -1,4 +1,291 @@
-node_modules/
+# .gitignore
+
+# ================================
+# SECURITY - NEVER COMMIT THESE!
+# ================================
+
+# Environment variables with private keys and API keys
 .env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+
+# Private keys and wallet files
+*.key
+*.pem
+*.p12
+*.pfx
+private-keys/
+wallets/
+keystore/
+
+# Configuration files with sensitive data
+config/secrets.json
+config/private.json
+secrets.json
+private.json
+
+# ================================
+# NODE.JS
+# ================================
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# ================================
+# BLOCKCHAIN & CRYPTO
+# ================================
+
+# Transaction logs and blockchain data
+transactions/
+tx-logs/
+blockchain-data/
+*.txlog
+
+# Bridge execution logs
+bridge-logs/
+execution-logs/
+*.bridgelog
+
+# Gas estimation cache
+gas-cache/
+*.gascache
+
+# Contract artifacts (if using Hardhat/Truffle)
+artifacts/
+cache/
+typechain/
+typechain-types/
+
+# ================================
+# LOGS & MONITORING
+# ================================
+
+# Log files
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Bot execution logs
+bot-logs/
+bridge-bot.log
+l2-bridge.log
+execution.log
+error.log
+debug.log
+
+# Performance monitoring
+performance/
+metrics/
+*.perf
+
+# ================================
+# DEVELOPMENT & TESTING
+# ================================
+
+# Testing
+test-results/
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ================================
+# BACKUP & ARCHIVE
+# ================================
+
+# Backup files
+*.backup
+*.bak
+*.old
+backups/
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ================================
+# DATABASE & STORAGE
+# ================================
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+database/
+db/
+
+# Redis dump files
+dump.rdb
+
+# ================================
+# DOCUMENTATION BUILD
+# ================================
+
+# Generated documentation
+docs/build/
+docs/_build/
+site/
+
+# ================================
+# SPECIFIC TO L2 BRIDGE BOT
+# ================================
+
+# Bridge execution history
+bridge-history/
+execution-history/
+*.history
+
+# Token price cache
+price-cache/
+*.pricecache
+
+# Route optimization cache
+route-cache/
+*.routecache
+
+# Balance snapshots
+balance-snapshots/
+*.snapshot
+
+# Strategy backtesting results
+backtest-results/
+strategy-results/
+
+# Custom configuration overrides
+config.local.js
+config.override.json
+
+# Deployment scripts with sensitive data
+deploy-private.js
+deploy-mainnet.js
+
+# ================================
+# MONITORING & ANALYTICS
+# ================================
+
+# Analytics data
+analytics/
+metrics/
+stats/
+
+# Performance profiling
+*.prof
+profiling/
+
+# Error tracking
+error-reports/
+crash-dumps/
+
+# ================================
+# OPTIONAL: ALLOW CERTAIN FILES
+# ================================
+
+# Force include important files even if they match patterns above
+!.env.example
+!config.example.json
+!README.md
+!package.json
+!package-lock.json
