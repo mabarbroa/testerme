@@ -1,264 +1,438 @@
-require('dotenv').config();
-const { LiFi } = require('@lifi/sdk');
+// l2-bridge-bot-enhanced.js
+const { LiFi, ChainId, getTokens } = require('@lifi/sdk');
 const { ethers } = require('ethers');
-const config = require('./config');
+require('dotenv').config();
 
-class JumperBot {
+class EnhancedETHL2BridgeBot {
   constructor() {
-    this.lifi = new LiFi({ integrator: 'JumperBot' });
-    this.wallets = {};
-    this.providers = {};
-    this.setupWallets();
-  }
-
-  setupWallets() {
-    // Setup wallet for each chain
-    Object.entries(config.chains).forEach(([name, chain]) => {
-      try {
-        const provider = new ethers.providers.JsonRpcProvider(chain.rpc);
-        this.providers[chain.id] = provider;
-        this.wallets[chain.id] = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-        console.log(`✅ Connected to ${chain.name} (Chain ID: ${chain.id})`);
-      } catch (error) {
-        console.error(`❌ Failed to connect to ${chain.name}:`, error.message);
-      }
+    this.lifi = new LiFi({
+      integrator: 'eth-l2-bridge-bot-enhanced',
     });
+    
+    // ETH L2 chains with native ETH support
+    this.l2Chains = {
+      ARBITRUM: ChainId.ARB,
+      OPTIMISM: ChainId.OPT, 
+      POLYGON: ChainId.POL,
+      BASE: ChainId.BAS,
+      AVALANCHE: ChainId.AVA,
+      FANTOM: ChainId.FTM
+    };
+    
+    // Token configurations for L2 bridging
+    this.supportedTokens = {
+      ETH: {
+        symbol: 'ETH',
+        decimals: 18,
+        // Native ETH addresses on each L2
+        addresses: {
+          [ChainId.ARB]: '0x0000000000000000000000000000000000000000', // Native ETH on Arbitrum
+          [ChainId.OPT]: '0x0000000000000000000000000000000000000000', // Native ETH on Optimism  
+          [ChainId.BAS]: '0x0000000000000000000000000000000000000000', // Native ETH on Base
+          [ChainId.POL]: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', // WETH on Polygon
+        }
+      },
+      USDC: {
+        symbol: 'USDC',
+        decimals: 6,
+        addresses: {
+          [ChainId.ARB]: '0xA0b86a33E6441e4e6c7c6c0c8c7c0c8c7c0c8c7c', // USDC on Arbitrum
+          [ChainId.OPT]: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', // USDC on Optimism
+          [ChainId.BAS]: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+          [ChainId.POL]: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC on Polygon
+        }
+      },
+      USDT: {
+        symbol: 'USDT', 
+        decimals: 6,
+        addresses: {
+          [ChainId.ARB]: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+          [ChainId.OPT]: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
+          [ChainId.POL]: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+        }
+      }
+    };
+    
+    this.isRunning = false;
   }
 
-  async checkBalance(chainId, tokenAddress) {
+  async initialize() {
     try {
-      const wallet = this.wallets[chainId];
-      if (!wallet) return '0';
-
-      if (tokenAddress === ethers.constants.AddressZero) {
-        // Native token
-        const balance = await wallet.getBalance();
-        return balance.toString();
-      } else {
-        // ERC20 token
-        const token = new ethers.Contract(
-          tokenAddress,
-          ['function balanceOf(address) view returns (uint256)'],
-          wallet
-        );
-        const balance = await token.balanceOf(wallet.address);
-        return balance.toString();
-      }
+      console.log('🚀 Initializing Enhanced ETH L2 Bridge Bot...');
+      
+      await this.lifi.initialize();
+      console.log('✅ LIFI SDK configured for ETH and token bridging'); // [[0]](#__0)
+      
+      this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY);
+      console.log('✅ Wallet configured:', this.wallet.address);
+      
+      await this.displayAvailableTokensAndChains();
+      
     } catch (error) {
-      console.error('Error checking balance:', error.message);
-      return '0';
+      console.error('❌ Initialization failed:', error.message);
+      throw error;
     }
   }
 
-  async findBestRoute(fromChain, toChain, fromToken, toToken, amount) {
-    try {
-      console.log(`\n🔍 Finding route: ${config.chains[Object.keys(config.chains).find(k => config.chains[k].id === fromChain)]?.name} → ${config.chains[Object.keys(config.chains).find(k => config.chains[k].id === toChain)]?.name}`);
+  async displayAvailableTokensAndChains() {
+    console.log('🌉 Available L2 Chains and Tokens:');
+    
+    for (const [chainName, chainId] of Object.entries(this.l2Chains)) {
+      console.log(`\n📍 ${chainName} (${chainId}):`);
       
-      const routes = await this.lifi.getRoutes({
-        fromChainId: fromChain,
-        toChainId: toChain,
-        fromTokenAddress: fromToken,
-        toTokenAddress: toToken,
-        fromAmount: amount,
+      // Display supported tokens on each chain
+      for (const [tokenSymbol, tokenConfig] of Object.entries(this.supportedTokens)) {
+        if (tokenConfig.addresses[chainId]) {
+          console.log(`  • ${tokenSymbol} - ${tokenConfig.addresses[chainId]}`);
+        }
+      }
+    }
+  }
+
+  async executeETHBridge(fromChain, toChain, ethAmount) {
+    try {
+      console.log(`🌉 Bridging ${ethAmount} ETH: ${fromChain} → ${toChain}`); // [[1]](#__1)
+      
+      const fromChainId = this.l2Chains[fromChain];
+      const toChainId = this.l2Chains[toChain];
+      
+      // ETH bridging configuration
+      const routeRequest = {
+        fromChainId: fromChainId,
+        toChainId: toChainId,
+        fromTokenAddress: this.supportedTokens.ETH.addresses[fromChainId] || '0x0000000000000000000000000000000000000000',
+        toTokenAddress: this.supportedTokens.ETH.addresses[toChainId] || '0x0000000000000000000000000000000000000000',
+        fromAmount: ethers.parseEther(ethAmount),
+        fromAddress: this.wallet.address,
+        toAddress: this.wallet.address,
         options: {
-          slippage: config.bot.slippage,
-          order: 'RECOMMENDED',
-          allowSwitchChain: true
+          slippage: 0.005, // 0.5% for ETH bridging
+          allowSwitchChain: true,
+          order: 'RECOMMENDED', // Get best route for ETH
         }
-      });
+      };
+
+      const routes = await this.lifi.getRoutes(routeRequest);
       
-      if (routes.routes.length === 0) {
-        console.log('❌ No routes found');
+      if (!routes.routes || routes.routes.length === 0) {
+        console.log('⚠️ No ETH bridge route available');
         return null;
       }
-      
+
       const bestRoute = routes.routes[0];
-      console.log(`✅ Found route with ${bestRoute.steps.length} step(s)`);
-      return bestRoute;
+      
+      // Display ETH bridge information
+      console.log(`💰 ETH Amount: ${ethers.formatEther(bestRoute.fromAmount)} → ${ethers.formatEther(bestRoute.toAmountMin)}`);
+      console.log(`🌉 Bridge Protocol: ${bestRoute.steps.map(s => s.tool).join(' → ')}`);
+      console.log(`⏱️ Estimated time: ${bestRoute.steps[0].estimate.executionDuration}s`);
+      console.log(`💸 Gas cost: ~$${bestRoute.steps[0].estimate.gasCosts?.[0]?.amountUSD || 'N/A'}`);
+
+      // Execute ETH bridge
+      const execution = await this.lifi.executeRoute(this.wallet, bestRoute);
+      
+      console.log('✅ ETH Bridge completed successfully');
+      console.log('🔗 Transaction:', execution.transactionHash);
+      
+      return execution;
+
     } catch (error) {
-      console.error('❌ Error finding route:', error.message);
+      console.error('❌ ETH Bridge failed:', error.message);
       return null;
     }
   }
 
-  async executeRoute(route) {
+  async executeTokenBridge(fromChain, toChain, tokenSymbol, amount) {
     try {
-      const wallet = this.wallets[route.fromChainId];
-      if (!wallet) throw new Error('Wallet not configured for chain');
-
-      console.log('\n🚀 Executing route...');
-
-      // Get transaction data for first step
-      const step = route.steps[0];
-      const tx = await this.lifi.getStepTransaction(step);
+      console.log(`🌉 Bridging ${amount} ${tokenSymbol}: ${fromChain} → ${toChain}`); // [[2]](#__2)
       
-      // Check if approval needed
-      if (step.action.fromToken.address !== ethers.constants.AddressZero) {
-        await this.approveToken(
-          step.action.fromToken.address,
-          tx.to,
-          step.action.fromAmount,
-          wallet
-        );
-      }
-
-      // Check gas price
-      const gasPrice = await wallet.getGasPrice();
-      const gasPriceGwei = ethers.utils.formatUnits(gasPrice, 'gwei');
-      console.log(`⛽ Gas price: ${parseFloat(gasPriceGwei).toFixed(2)} gwei`);
+      const fromChainId = this.l2Chains[fromChain];
+      const toChainId = this.l2Chains[toChain];
+      const tokenConfig = this.supportedTokens[tokenSymbol];
       
-      if (parseFloat(gasPriceGwei) > config.bot.maxGasPrice) {
-        console.log(`❌ Gas price too high (max: ${config.bot.maxGasPrice} gwei)`);
+      if (!tokenConfig) {
+        console.log(`❌ Token ${tokenSymbol} not supported`);
         return null;
       }
 
-      // Execute transaction
-      const transaction = await wallet.sendTransaction({
-        to: tx.to,
-        data: tx.data,
-        value: tx.value || '0',
-        gasLimit: tx.gasLimit,
-        gasPrice: gasPrice
-      });
+      const routeRequest = {
+        fromChainId: fromChainId,
+        toChainId: toChainId,
+        fromTokenAddress: tokenConfig.addresses[fromChainId],
+        toTokenAddress: tokenConfig.addresses[toChainId],
+        fromAmount: ethers.parseUnits(amount, tokenConfig.decimals),
+        fromAddress: this.wallet.address,
+        toAddress: this.wallet.address,
+        options: {
+          slippage: 0.005,
+          allowSwitchChain: true,
+        }
+      };
 
-      console.log(`✅ Transaction sent: ${transaction.hash}`);
-      const receipt = await transaction.wait();
-      console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+      const routes = await this.lifi.getRoutes(routeRequest);
       
-      return receipt;
+      if (!routes.routes || routes.routes.length === 0) {
+        console.log(`⚠️ No ${tokenSymbol} bridge route available`);
+        return null;
+      }
+
+      const bestRoute = routes.routes[0];
+      
+      console.log(`💰 ${tokenSymbol}: ${ethers.formatUnits(bestRoute.fromAmount, tokenConfig.decimals)} → ${ethers.formatUnits(bestRoute.toAmountMin, tokenConfig.decimals)}`);
+      console.log(`🌉 Bridge: ${bestRoute.steps.map(s => s.tool).join(' → ')}`);
+
+      const execution = await this.lifi.executeRoute(this.wallet, bestRoute);
+      
+      console.log(`✅ ${tokenSymbol} Bridge completed`);
+      console.log('🔗 Transaction:', execution.transactionHash);
+      
+      return execution;
+
     } catch (error) {
-      console.error('❌ Execution error:', error.message);
+      console.error(`❌ ${tokenSymbol} Bridge failed:`, error.message);
       return null;
     }
   }
 
-  async approveToken(tokenAddress, spender, amount, wallet) {
-    const token = new ethers.Contract(
-      tokenAddress,
-      [
-        'function approve(address spender, uint256 amount) returns (bool)',
-        'function allowance(address owner, address spender) view returns (uint256)'
-      ],
-      wallet
-    );
-    
-    // Check current allowance
-    const allowance = await token.allowance(wallet.address, spender);
-    if (allowance.gte(amount)) {
-      console.log('✅ Token already approved');
-      return;
+  async runMixedBridgeStrategy() {
+    const mixedStrategies = [
+      // ETH bridging strategies
+      { type: 'ETH', from: 'ARBITRUM', to: 'OPTIMISM', amount: '0.1' },
+      { type: 'ETH', from: 'OPTIMISM', to: 'BASE', amount: '0.05' },
+      { type: 'ETH', from: 'BASE', to: 'POLYGON', amount: '0.08' },
+      
+      // Token bridging strategies  
+      { type: 'USDC', from: 'ARBITRUM', to: 'OPTIMISM', amount: '50' },
+      { type: 'USDC', from: 'OPTIMISM', to: 'BASE', amount: '25' },
+      { type: 'USDT', from: 'POLYGON', to: 'ARBITRUM', amount: '30' },
+      
+      // Mixed back-and-forth
+      { type: 'ETH', from: 'POLYGON', to: 'ARBITRUM', amount: '0.03' },
+      { type: 'USDC', from: 'BASE', to: 'POLYGON', amount: '40' },
+    ];
+
+    console.log('🔄 Starting Mixed ETH + Token L2 Bridge Strategy...'); // [[3]](#__3)
+
+    for (const strategy of mixedStrategies) {
+      console.log(`\n📍 Strategy: ${strategy.amount} ${strategy.type} from ${strategy.from} to ${strategy.to}`);
+      
+      let result;
+      if (strategy.type === 'ETH') {
+        result = await this.executeETHBridge(strategy.from, strategy.to, strategy.amount);
+      } else {
+        result = await this.executeTokenBridge(strategy.from, strategy.to, strategy.type, strategy.amount);
+      }
+
+      if (result) {
+        console.log(`✅ Success: ${strategy.type} bridge completed`);
+        await this.waitForConfirmation(result.transactionHash, this.l2Chains[strategy.from]);
+      } else {
+        console.log(`❌ Failed: Skipping to next strategy`);
+      }
+      
+      // Delay between bridges
+      console.log('⏳ Waiting 90 seconds before next bridge...');
+      await this.delay(90000);
     }
-    
-    console.log('🔄 Approving token...');
-    const tx = await token.approve(spender, amount);
-    await tx.wait();
-    console.log('✅ Token approved');
   }
 
-  calculateProfit(route) {
-    const fromUSD = parseFloat(route.fromAmountUSD);
-    const toUSD = parseFloat(route.toAmountUSD);
-    const gasUSD = parseFloat(route.gasCostUSD || 0);
-    const profit = toUSD - fromUSD - gasUSD;
+  async getETHAndTokenBalances() {
+    console.log('\n💰 ETH and Token Balances Across L2s:');
     
-    console.log(`💰 From: $${fromUSD.toFixed(2)} → To: $${toUSD.toFixed(2)}`);
-    console.log(`⛽ Gas cost: $${gasUSD.toFixed(2)}`);
-    console.log(`📊 Net profit: $${profit.toFixed(2)}`);
-    
-    return profit;
-  }
-
-  async scanOpportunities() {
-    console.log('\n' + '='.repeat(50));
-    console.log(`🔄 Scanning opportunities at ${new Date().toLocaleTimeString()}`);
-    console.log('='.repeat(50));
-    
-    const amount = ethers.utils.parseUnits('1000', 6); // 1000 USDC
-    
-    // Get active chains (with working wallets)
-    const activeChains = Object.entries(config.chains)
-      .filter(([_, chain]) => this.wallets[chain.id])
-      .map(([name, chain]) => ({ name, ...chain }));
-    
-    console.log(`\n📡 Active chains: ${activeChains.map(c => c.name).join(', ')}`);
-    
-    // Scan all chain pairs
-    for (const fromChain of activeChains) {
-      for (const toChain of activeChains) {
-        if (fromChain.id === toChain.id) continue;
+    for (const [chainName, chainId] of Object.entries(this.l2Chains)) {
+      console.log(`\n📍 ${chainName}:`);
+      
+      try {
+        // Get ETH balance
+        const provider = new ethers.JsonRpcProvider(this.getRPCUrl(chainId));
+        const ethBalance = await provider.getBalance(this.wallet.address);
+        console.log(`  • ETH: ${ethers.formatEther(ethBalance)}`);
         
-        // Get token addresses
-        const fromToken = config.tokens.USDC[fromChain.name.toLowerCase()];
-        const toToken = config.tokens.USDC[toChain.name.toLowerCase()];
+        // Get token balances using LIFI SDK
+        const tokens = await this.lifi.getTokenBalances(this.wallet.address, {
+          chains: [chainId]
+        });
         
-        if (!fromToken || fromToken === '0x0000000000000000000000000000000000000000') {
-          console.log(`⚠️  USDC not configured for ${fromChain.name}`);
-          continue;
-        }
-        
-        // Check balance
-        const balance = await this.checkBalance(fromChain.id, fromToken);
-        if (balance === '0' || ethers.BigNumber.from(balance).lt(amount)) {
-          console.log(`⚠️  Insufficient USDC balance on ${fromChain.name}`);
-          continue;
-        }
-        
-        const route = await this.findBestRoute(
-          fromChain.id,
-          toChain.id,
-          fromToken,
-          toToken,
-          amount.toString()
-        );
-        
-        if (route) {
-          const profit = this.calculateProfit(route);
-          
-          if (profit >= config.bot.minProfit) {
-            console.log(`\n🎯 PROFITABLE ROUTE FOUND!`);
-            console.log(`💵 Expected profit: $${profit.toFixed(2)}`);
-            
-            const confirm = await this.confirmExecution(route, profit);
-            if (confirm) {
-              await this.executeRoute(route);
-            }
+        tokens.forEach(token => {
+          if (parseFloat(token.amount) > 0) {
+            console.log(`  • ${token.symbol}: ${token.amount}`);
           }
-        }
+        });
+        
+      } catch (error) {
+        console.log(`  • ${chainName}: Unable to fetch balances`);
       }
     }
-    
-    console.log('\n✅ Scan completed');
   }
 
-  async confirmExecution(route, profit) {
-    // In production, you might want to add additional checks here
-    // For now, auto-execute if profitable
-    return true;
+  getRPCUrl(chainId) {
+    const rpcUrls = {
+      [ChainId.ARB]: process.env.ARBITRUM_RPC || 'https://arb1.arbitrum.io/rpc',
+      [ChainId.OPT]: process.env.OPTIMISM_RPC || 'https://mainnet.optimism.io',
+      [ChainId.BAS]: process.env.BASE_RPC || 'https://mainnet.base.org',
+      [ChainId.POL]: process.env.POLYGON_RPC || 'https://polygon-rpc.com',
+    };
+    return rpcUrls[chainId];
+  }
+
+  async waitForConfirmation(txHash, chainId) {
+    try {
+      console.log('⏳ Waiting for transaction confirmation...');
+      
+      const status = await this.lifi.getStatus({
+        bridge: 'lifi',
+        fromChain: chainId,
+        toChain: chainId,
+        txHash: txHash
+      });
+      
+      console.log(`📋 Status: ${status.status}`);
+      return status;
+    } catch (error) {
+      console.log('⚠️ Could not verify transaction status');
+    }
   }
 
   async start() {
-    console.log('🚀 Jumper Bot Started');
-    console.log(`⚙️  Min profit threshold: $${config.bot.minProfit}`);
-    console.log(`⚙️  Check interval: ${config.bot.checkInterval/1000} seconds`);
-    console.log(`⚙️  Max gas price: ${config.bot.maxGasPrice} gwei`);
-    console.log(`👛 Wallet address: ${this.wallets[1]?.address || 'Not configured'}`);
+    if (this.isRunning) return;
     
-    // Initial scan
-    await this.scanOpportunities();
-    
-    // Set interval
-    setInterval(() => {
-      this.scanOpportunities();
-    }, config.bot.checkInterval);
+    this.isRunning = true;
+    console.log('🔄 Starting automated ETH + Token L2 bridging...');
+
+    while (this.isRunning) {
+      try {
+        // Check all balances
+        await this.getETHAndTokenBalances();
+        
+        // Execute mixed bridge strategy
+        await this.runMixedBridgeStrategy();
+        
+        // Wait 15 minutes before next cycle
+        console.log('\n⏳ Waiting 15 minutes before next bridge cycle...');
+        await this.delay(900000);
+        
+      } catch (error) {
+        console.error('❌ Strategy error:', error.message);
+        await this.delay(120000); // Wait 2 minutes on error
+      }
+    }
+  }
+
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  stop() {
+    this.isRunning = false;
+    console.log('🛑 Enhanced L2 Bridge Bot stopped');
   }
 }
 
-// Start bot
-const bot = new JumperBot();
-bot.start().catch(console.error);
+// Advanced ETH + Token Strategies
+class AdvancedMixedL2Strategies extends EnhancedETHL2BridgeBot {
+  
+  async ethArbitrageStrategy() {
+    console.log('🔍 Scanning for ETH arbitrage across L2s...');
+    
+    const ethPairs = [
+      ['ARBITRUM', 'OPTIMISM'],
+      ['OPTIMISM', 'BASE'],
+      ['BASE', 'POLYGON'],
+      ['POLYGON', 'ARBITRUM']
+    ];
 
-// Graceful shutdown
+    for (const [fromL2, toL2] of ethPairs) {
+      try {
+        const route = await this.lifi.getRoutes({
+          fromChainId: this.l2Chains[fromL2],
+          toChainId: this.l2Chains[toL2],
+          fromTokenAddress: '0x0000000000000000000000000000000000000000', // Native ETH
+          toTokenAddress: '0x0000000000000000000000000000000000000000',
+          fromAmount: ethers.parseEther('0.1'),
+          fromAddress: this.wallet.address,
+          toAddress: this.wallet.address
+        });
+
+        if (route.routes.length > 0) {
+          const bestRoute = route.routes[0];
+          const inputETH = parseFloat(ethers.formatEther(bestRoute.fromAmount));
+          const outputETH = parseFloat(ethers.formatEther(bestRoute.toAmountMin));
+          const profit = outputETH - inputETH;
+          
+          if (profit > 0.001) { // 0.001 ETH profit threshold
+            console.log(`💡 ETH Arbitrage: ${fromL2} → ${toL2}`);
+            console.log(`   Profit: ${profit.toFixed(6)} ETH`);
+            
+            await this.executeETHBridge(fromL2, toL2, '0.1');
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️ Could not check ETH arbitrage ${fromL2} → ${toL2}`);
+      }
+    }
+  }
+
+  async liquidityBalancing() {
+    console.log('⚖️ Balancing ETH and tokens across L2s...');
+    
+    // Get current balances
+    const balances = {};
+    
+    for (const [chainName, chainId] of Object.entries(this.l2Chains)) {
+      try {
+        const provider = new ethers.JsonRpcProvider(this.getRPCUrl(chainId));
+        const ethBalance = await provider.getBalance(this.wallet.address);
+        
+        balances[chainName] = {
+          ETH: parseFloat(ethers.formatEther(ethBalance)),
+          // Add token balances here
+        };
+      } catch (error) {
+        console.log(`⚠️ Could not get balances for ${chainName}`);
+      }
+    }
+    
+    // Implement rebalancing logic
+    const totalETH = Object.values(balances).reduce((sum, bal) => sum + bal.ETH, 0);
+    const targetETHPerChain = totalETH / Object.keys(balances).length;
+    
+    console.log(`📊 Total ETH: ${totalETH.toFixed(4)}, Target per chain: ${targetETHPerChain.toFixed(4)}`);
+    
+    // Move ETH from over-balanced to under-balanced chains
+    for (const [chainName, balance] of Object.entries(balances)) {
+      if (balance.ETH > targetETHPerChain * 1.2) { // 20% over target
+        const excess = balance.ETH - targetETHPerChain;
+        console.log(`📤 ${chainName} has excess ${excess.toFixed(4)} ETH`);
+        
+        // Find chain with lowest balance to send to
+        const lowestChain = Object.entries(balances)
+          .filter(([name]) => name !== chainName)
+          .sort(([,a], [,b]) => a.ETH - b.ETH)[0];
+        
+        if (lowestChain && lowestChain[1].ETH < targetETHPerChain * 0.8) {
+          console.log(`📥 Sending ${(excess * 0.5).toFixed(4)} ETH to ${lowestChain[0]}`);
+          await this.executeETHBridge(chainName, lowestChain[0], (excess * 0.5).toString());
+        }
+      }
+    }
+  }
+}
+
+// Start the Enhanced Bridge Bot
+async function main() {
+  const bot = new EnhancedETHL2BridgeBot();
+  // const advancedBot = new AdvancedMixedL2Strategies(); // For advanced features
+  
+  try {
+    await bot.initialize();
+    await bot.start();
+  } catch (error) {
+    console.error('❌ Bot failed:', error.message);
+  }
+}
+
 process.on('SIGINT', () => {
-  console.log('\n\n👋 Bot stopped');
+  console.log('\n🛑 Shutting down Enhanced L2 Bridge Bot...');
   process.exit(0);
 });
+
+main();
